@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js" defer></script>
 <style>
 /* Layout: one-screen table. Dealer on top, felt print in the middle, player hands below, a control dock at the bottom; stats slide in from the right. */
 :root{
@@ -428,7 +429,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
       <span class="sep"></span>
       <button class="btn" id="clearBtn">Clear <kbd>C</kbd></button>
       <button class="btn primary" id="dealBtn">Deal <kbd>Space</kbd></button>
-      <button class="btn primary" id="refillBtn" hidden>Reset bankroll to 1,000</button>
+      <button class="btn primary" id="refillBtn" hidden>Get 1,000 chips</button>
     </div>
     <div class="group" id="gIns" hidden>
       <span class="prompt">Dealer shows an Ace. Insurance <span id="insCost"></span>?</span>
@@ -511,8 +512,48 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
   S.bet = S.lastBet <= S.balance ? S.lastBet : 0;
 
   const save = () => {
-    try { localStorage.setItem('noir21', JSON.stringify({ balance:S.balance, stats:S.stats, lastBet:S.lastBet })); } catch (e) {}
+    const json = JSON.stringify({ balance:S.balance, stats:S.stats, lastBet:S.lastBet });
+    try { localStorage.setItem('noir21', json); } catch (e) {}
+    CG.call(sdk => sdk.data.setItem('noir21', json));
   };
+
+  /* ---------- CrazyGames SDK (does nothing outside CrazyGames) ---------- */
+  const AD_EVERY = 5;
+  const CG = {
+    sdk: null,
+    env: 'disabled',
+    playing: false,
+    async init() {
+      try {
+        const sdk = window.CrazyGames && window.CrazyGames.SDK;
+        if (!sdk) return;
+        await sdk.init();
+        this.sdk = sdk;
+        this.env = sdk.environment;
+      } catch (e) { this.sdk = null; }
+    },
+    get on() { return !!this.sdk && this.env !== 'disabled'; },
+    call(fn) { try { if (this.on) fn(this.sdk); } catch (e) {} },
+    start() { if (!this.playing) { this.playing = true; this.call(sdk => sdk.game.gameplayStart()); } },
+    stop() { if (this.playing) { this.playing = false; this.call(sdk => sdk.game.gameplayStop()); } },
+    // Resolves true when the ad played to the end, false on error or when no ad is available
+    ad(type) {
+      return new Promise(resolve => {
+        if (!this.on) return resolve(false);
+        let done = false;
+        const finish = ok => { if (!done) { done = true; resolve(ok); } };
+        setTimeout(() => finish(false), 90000);
+        try {
+          this.sdk.ad.requestAd(type, {
+            adStarted: () => {},
+            adFinished: () => finish(true),
+            adError: () => finish(false),
+          });
+        } catch (e) { finish(false); }
+      });
+    },
+  };
+  let roundsSinceAd = 0;
 
   /* ---------- Cards ---------- */
   let uid = 0;
@@ -789,6 +830,14 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
   /* ---------- Flow ---------- */
   async function deal() {
     if (S.phase !== 'betting' || !S.bet || S.bet > S.balance) return;
+    if (CG.on && roundsSinceAd >= AD_EVERY) {
+      roundsSinceAd = 0;
+      CG.stop();
+      say('Short break');
+      render();
+      await CG.ad('midgame');
+    }
+    CG.start();
     if (S.shoe.length < DECKS * 52 * 0.25) { S.shoe = newShoe(); toast('New shoe shuffled'); }
     cardEls.clear();
     $('dCards').innerHTML = ''; $('hands').innerHTML = '';
@@ -964,6 +1013,8 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
     S.bet = S.lastBet <= S.balance ? S.lastBet : 0;
     save();
     setTimeout(animateResults, 60);
+    roundsSinceAd++;
+    if (naturals && net > 0) CG.call(sdk => sdk.game.happytime());
   }
 
   /* ---------- Betting ---------- */
@@ -1004,14 +1055,21 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
     save(); render();
     toast('+1,000 added to your balance');
   }
-  function refill() {
-    S.balance = START; S.bet = Math.min(S.lastBet, START);
-    say('Fresh bankroll. Place your bet');
+  async function refill() {
+    if (CG.on) {
+      CG.stop();
+      const watched = await CG.ad('rewarded');
+      if (!watched) { toast('No ad available right now. Try again in a moment'); return; }
+    }
+    S.balance += START; S.bet = Math.min(S.lastBet, S.balance);
+    S.stats.peak = Math.max(S.stats.peak, S.balance);
+    say('+1,000 chips. Place your bet');
     save(); render();
   }
 
   /* ---------- Stats drawer ---------- */
   function toggleStats(open) {
+    if (open ?? !$('stats').classList.contains('open')) CG.stop();
     const panel = $('stats');
     const show = open ?? !panel.classList.contains('open');
     panel.classList.toggle('open', show);
@@ -1038,7 +1096,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
   document.querySelectorAll('.chip').forEach(ch => ch.addEventListener('click', () => addChip(+ch.dataset.v)));
   $('clearBtn').onclick = clearBet;
   $('dealBtn').onclick = () => act(deal);
-  $('refillBtn').onclick = refill;
+  $('refillBtn').onclick = () => act(refill);
   $('secret').onclick = e => { e.currentTarget.blur(); addThousand(); };
   $('insYes').onclick = () => act(() => answerInsurance(true));
   $('insNo').onclick = () => act(() => answerInsurance(false));
@@ -1077,6 +1135,26 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
   S.shoe = newShoe();
   if (S.balance < 5) say('Out of chips');
   render();
+
+  async function boot() {
+    await CG.init();
+    if (!CG.on) return;
+    $('refillBtn').textContent = 'Watch an ad for 1,000 chips';
+    // Saved progress from the player's CrazyGames account wins over this browser's copy
+    try {
+      const raw = await Promise.resolve(CG.sdk.data.getItem('noir21'));
+      const data = raw && JSON.parse(raw);
+      if (data && S.phase === 'betting' && !S.hands.length) {
+        S.balance = data.balance ?? S.balance;
+        S.stats = { ...freshStats(), ...(data.stats || {}) };
+        S.lastBet = data.lastBet ?? S.lastBet;
+        S.bet = S.lastBet <= S.balance ? S.lastBet : 0;
+        render();
+      }
+    } catch (e) {}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
 })();
 </script>
 </body>
