@@ -333,7 +333,39 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
   .center{padding-block:12px}
   .print{display:none}
 }
+/* Chip motion */
+.chip.fly{position:fixed;margin:0;z-index:40;pointer-events:none}
+.stack{position:relative}
+.stack-chips.restack .sc{animation:restack .38s var(--ease) both}
+@keyframes restack{0%{transform:scaleY(.25) translateY(12px);opacity:.3}60%{transform:scaleY(1.12)}100%{transform:none;opacity:1}}
+.stack-chips.clearing{animation:clearout .25s ease-in forwards}
+@keyframes clearout{to{transform:translateY(46px);opacity:0}}
+.stack-chips.lost{animation:lost .7s var(--ease) .25s forwards}
+@keyframes lost{to{transform:translateY(-70px) scale(.8);opacity:0}}
+.stack.won .stack-chips{animation:won 1.1s var(--ease)}
+@keyframes won{30%{transform:translateY(-8px);filter:drop-shadow(0 0 12px var(--accent))}100%{transform:none;filter:none}}
+.stack-amt.bump{animation:bump .3s var(--ease)}
+@keyframes bump{40%{transform:scale(1.25)}}
+.float{
+  position:absolute;left:50%;top:-8px;white-space:nowrap;pointer-events:none;
+  font-family:var(--f-mono);font-weight:600;font-size:15px;color:var(--win);
+  animation:floatup 1.6s var(--ease) forwards;
+}
+@keyframes floatup{0%{opacity:0;transform:translate(-50%,8px)}20%{opacity:1}100%{opacity:0;transform:translate(-50%,-46px)}}
+.balance strong{transition:color .4s}
+.balance strong.up{color:var(--win)}
+.balance strong.down{color:var(--lose)}
+
+/* The hidden refill dot */
+.secret{
+  position:absolute;left:10px;bottom:10px;z-index:2;
+  width:10px;height:10px;border-radius:50%;border:none;padding:0;
+  background:var(--line-strong);opacity:.35;transition:opacity .2s,background .2s,transform .2s;
+}
+.secret:hover,.secret:focus-visible{opacity:1;background:var(--accent);transform:scale(1.4)}
+
 @media (prefers-reduced-motion:reduce){
+  .stack-chips.restack .sc,.stack.won .stack-chips,.stack-amt.bump,.float{animation:none}
   .sc.drop{animation:none}
   .card.enter{animation-duration:.01s}
   .card-inner,.stats,.toast{transition-duration:.01s}
@@ -354,6 +386,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
   </header>
 
   <main class="table">
+    <button class="secret" id="secret" aria-label="Add 1,000 chips"></button>
     <div class="toast" id="toast" role="status"></div>
     <section class="zone dealer" aria-label="Dealer">
       <div class="label">Dealer</div>
@@ -534,18 +567,94 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
     const chips = [];
     let rest = Math.round(amount);
     for (const v of CHIP_VALUES) while (rest >= v && chips.length < 14) { chips.push(v); rest -= v; }
-    stack.querySelector('.stack-amt').textContent = amount ? fmt(amount) : '';
+    const amt = stack.querySelector('.stack-amt');
+    const before = +(amt.dataset.v || 0);
+    if (before !== amount) {
+      amt.dataset.v = amount;
+      if (amount) {
+        countTo(amt, before, amount);
+        amt.classList.remove('bump'); void amt.offsetWidth; amt.classList.add('bump');
+      } else amt.textContent = '';
+    }
     const box = stack.querySelector('.stack-chips');
     const key = chips.join(',');
     if (box.dataset.key === key) return;
-    const prev = +(box.dataset.count || 0);
+    const old = box.dataset.key || '';
+    const appended = old === '' || key.startsWith(old + ',');
+    const prev = appended ? +(box.dataset.count || 0) : 0;
     box.dataset.key = key;
     box.dataset.count = chips.length;
-    box.innerHTML = chips.map((v, i) => `<i class="sc${i >= prev ? ' drop' : ''}" data-v="${v}" style="animation-delay:${(i - prev) * 40}ms"></i>`).join('');
+    box.className = 'stack-chips' + (appended ? '' : ' restack');
+    box.innerHTML = chips.map((v, i) => i < prev ? `<i class="sc" data-v="${v}"></i>`
+      : `<i class="sc${appended ? ' drop' : ''}" data-v="${v}" style="animation-delay:${(i - prev) * (appended ? 40 : 25)}ms"></i>`).join('');
+  }
+
+  /* Count a number up or down instead of jumping */
+  function countTo(el, from, to, ms = 450) {
+    cancelAnimationFrame(el._raf);
+    if (reduce || from === to) { el.textContent = fmt(to); return; }
+    const t0 = performance.now();
+    const step = now => {
+      const p = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - p, 3);
+      el.textContent = p < 1 ? fmt(Math.round(from + (to - from) * e)) : fmt(to);
+      if (p < 1) el._raf = requestAnimationFrame(step);
+    };
+    el._raf = requestAnimationFrame(step);
+  }
+
+  /* A chip flies from the rack to the bet circle */
+  let flying = 0;
+  function flyChip(btn) {
+    if (reduce) return Promise.resolve();
+    const target = $('spotStack').hidden ? $('betspot') : $('spotStack').querySelector('.stack-chips');
+    const a = btn.getBoundingClientRect(), b = target.getBoundingClientRect();
+    const f = btn.cloneNode(true);
+    f.classList.add('fly');
+    f.removeAttribute('aria-label');
+    Object.assign(f.style, { left:a.left + 'px', top:a.top + 'px', width:a.width + 'px' });
+    document.body.appendChild(f);
+    const dx = b.left + b.width / 2 - (a.left + a.width / 2);
+    const dy = (b.height > 40 ? b.top + b.height / 2 : b.top) - (a.top + a.height / 2);
+    const anim = f.animate([
+      { transform:'translate(0,0) scale(1) rotate(0deg)' },
+      { transform:`translate(${dx * .55}px, ${dy * .55 - 70}px) scale(.95) rotate(200deg)`, offset:.55 },
+      { transform:`translate(${dx}px, ${dy}px) scale(.8) rotate(360deg)`, opacity:.6 },
+    ], { duration:480, easing:'cubic-bezier(.3,.7,.3,1)' });
+    return anim.finished.then(() => f.remove(), () => f.remove());
+  }
+
+  /* After a round: winning stacks jump and show the payout, losing stacks slide to the dealer */
+  function animateResults() {
+    if (reduce) return;
+    S.hands.forEach((h, i) => {
+      const el = $('hands').children[i];
+      if (!el || !h.result) return;
+      const stack = el.querySelector('.stack');
+      if (h.net > 0) {
+        stack.classList.add('won');
+        const f = document.createElement('span');
+        f.className = 'float';
+        f.textContent = '+' + fmt(h.net);
+        stack.appendChild(f);
+        setTimeout(() => f.remove(), 1700);
+      } else if (h.net < 0) {
+        stack.querySelector('.stack-chips').classList.add('lost');
+      }
+    });
   }
 
   function render() {
-    $('balance').textContent = fmt(S.balance);
+    const balEl = $('balance');
+    const shownBal = +(balEl.dataset.v ?? S.balance);
+    if (balEl.dataset.v === undefined || shownBal !== S.balance) {
+      if (balEl.dataset.v !== undefined) {
+        balEl.classList.remove('up', 'down');
+        balEl.classList.add(S.balance > shownBal ? 'up' : 'down');
+        clearTimeout(balEl._t); balEl._t = setTimeout(() => balEl.classList.remove('up', 'down'), 700);
+      }
+      balEl.dataset.v = S.balance;
+      countTo(balEl, shownBal, S.balance);
+    }
     const left = S.shoe.length, full = DECKS * 52;
     $('shoeCount').textContent = left;
     $('shoeFill').style.width = (left / full * 100) + '%';
@@ -582,10 +691,11 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 
     const spot = $('betspot');
     spot.hidden = S.hands.length > 0;
-    spot.classList.toggle('has', S.bet > 0);
-    $('spotStack').hidden = !S.bet;
-    $('spotEmpty').hidden = !!S.bet;
-    renderStack($('spotStack'), S.bet);
+    if (!flying) S.spotBet = S.bet;
+    spot.classList.toggle('has', S.spotBet > 0);
+    $('spotStack').hidden = !S.spotBet;
+    $('spotEmpty').hidden = !!S.spotBet;
+    renderStack($('spotStack'), S.spotBet);
 
     const msg = $('msg');
     msg.textContent = S.msg;
@@ -838,18 +948,46 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
     S.phase = 'betting';
     S.bet = S.lastBet <= S.balance ? S.lastBet : 0;
     save();
+    setTimeout(animateResults, 60);
   }
 
   /* ---------- Betting ---------- */
+  /* Clear last round's cards so the bet circle shows while you bet */
+  function clearTable() {
+    if (!S.hands.length) return;
+    S.hands = []; S.dealer = [];
+    cardEls.clear();
+    $('dCards').innerHTML = ''; $('hands').innerHTML = '';
+    say('Place your bet');
+  }
   function addChip(v) {
     if (S.phase !== 'betting' || S.busy) return;
     if (S.bet + v > S.balance) { toast('Not enough chips for that'); return; }
+    if (S.hands.length) { clearTable(); S.bet = 0; S.spotBet = 0; render(); }
     S.bet += v;
+    flying++;
     render();
+    const btn = document.querySelector(`.chip[data-v="${v}"]`);
+    flyChip(btn).then(() => {
+      flying--;
+      S.spotBet = Math.min(S.bet, (S.spotBet || 0) + v);
+      render();
+    });
   }
   function clearBet() {
-    if (S.phase !== 'betting' || S.busy) return;
-    S.bet = 0; render();
+    if (S.phase !== 'betting' || S.busy || !S.bet) return;
+    S.bet = 0;
+    clearTable();
+    const box = $('spotStack').querySelector('.stack-chips');
+    if (reduce || $('spotStack').hidden) { render(); return; }
+    box.classList.add('clearing');
+    setTimeout(() => { box.classList.remove('clearing'); render(); }, 250);
+  }
+  function addThousand() {
+    S.balance += 1000;
+    S.stats.peak = Math.max(S.stats.peak, S.balance);
+    save(); render();
+    toast('+1,000 added to your balance');
   }
   function refill() {
     S.balance = START; S.bet = Math.min(S.lastBet, START);
@@ -886,6 +1024,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
   $('clearBtn').onclick = clearBet;
   $('dealBtn').onclick = () => act(deal);
   $('refillBtn').onclick = refill;
+  $('secret').onclick = e => { e.currentTarget.blur(); addThousand(); };
   $('insYes').onclick = () => act(() => answerInsurance(true));
   $('insNo').onclick = () => act(() => answerInsurance(false));
   const playAct = fn => () => { if (S.phase === 'player') act(fn); };
