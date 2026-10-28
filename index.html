@@ -134,12 +134,27 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .stack-chips{display:flex;flex-direction:column-reverse;align-items:center}
 .sc{
   --c:var(--chip-5);
-  width:52px;height:16px;border-radius:50%;flex:none;
-  background:repeating-linear-gradient(90deg, var(--c) 0 7px, rgba(255,255,255,.85) 7px 10px);
-  box-shadow:0 2px 0 color-mix(in srgb, var(--c) 55%, #000), 0 0 0 1px rgba(0,0,0,.25);
+  position:relative;width:56px;height:21px;flex:none;
+  filter:drop-shadow(0 2px 2px rgba(0,0,0,.35));
 }
-.sc + .sc{margin-bottom:-10px}
-.stack-chips .sc:last-child{background:radial-gradient(ellipse at center, var(--c) 0 45%, rgba(255,255,255,.7) 46% 52%, var(--c) 53%)}
+.sc + .sc{margin-bottom:-14px}
+/* Edge: striped band under the face; each chip shows 7px of it */
+.sc::after{
+  content:"";position:absolute;left:0;right:0;top:7px;bottom:0;
+  border-radius:0 0 28px 28px / 0 0 7px 7px;
+  background:
+    linear-gradient(to bottom, rgba(0,0,0,0) 40%, rgba(0,0,0,.35)),
+    repeating-linear-gradient(90deg, var(--c) 0 7px, #f1ece0 7px 10px);
+}
+.sc:nth-child(even)::after{background-position:0 0, 4px 0}
+.sc:nth-child(3n)::after{background-position:0 0, 2px 0}
+/* Face: the top of the chip, only fully visible on the top chip */
+.sc::before{
+  content:"";position:absolute;left:0;right:0;top:0;height:14px;z-index:1;border-radius:50%;
+  background:
+    radial-gradient(ellipse at center, color-mix(in srgb, var(--c) 88%, #fff) 0 44%, rgba(241,236,224,.85) 45% 51%, var(--c) 52% 100%);
+  box-shadow:0 0 0 1px color-mix(in srgb, var(--c) 70%, #000) inset;
+}
 .sc[data-v="25"]{--c:var(--chip-25)}
 .sc[data-v="100"]{--c:var(--chip-100)}
 .sc[data-v="500"]{--c:var(--chip-500)}
@@ -216,7 +231,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .pill.win{color:var(--win)} .pill.lose{color:var(--lose)} .pill.push{color:var(--push)}
 
 .betspot{
-  min-width:110px;min-height:110px;border-radius:50%;
+  width:140px;height:140px;border-radius:50%;
   border:1px dashed var(--line-strong);
   display:grid;place-items:center;text-align:center;padding:12px;
   font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);
@@ -566,7 +581,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
   function renderStack(stack, amount) {
     const chips = [];
     let rest = Math.round(amount);
-    for (const v of CHIP_VALUES) while (rest >= v && chips.length < 14) { chips.push(v); rest -= v; }
+    for (const v of CHIP_VALUES) while (rest >= v && chips.length < 10) { chips.push(v); rest -= v; }
     const amt = stack.querySelector('.stack-amt');
     const before = +(amt.dataset.v || 0);
     if (before !== amount) {
