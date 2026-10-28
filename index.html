@@ -29,7 +29,7 @@
   --push:#a7aeaa;
   --chip-5:#d4614f;
   --chip-25:#4f9e74;
-  --chip-100:#2b3034;
+  --chip-100:#3d454c;
   --chip-500:#7d62b5;
   --chip-text:#f6f3ea;
   --f-display:"Instrument Serif", "Iowan Old Style", Georgia, serif;
@@ -112,16 +112,39 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .total:empty{display:none}
 
 .center{display:flex;flex-direction:column;align-items:center;gap:6px;padding-block:22px;text-align:center}
-.score{display:flex;align-items:center;gap:clamp(20px, 6vw, 56px)}
-.side{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:3.2em}
-.side span{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
-.side strong{
-  font-family:var(--f-display);font-weight:400;font-size:clamp(44px, 7vw, 76px);line-height:1;
-  font-variant-numeric:tabular-nums;transition:color .25s;
+/* Total badge on the top-left corner of a hand */
+.cardwrap{position:relative;padding:14px 0 0 14px;margin:-14px 0 0 -14px}
+.badge{
+  position:absolute;top:0;left:0;z-index:3;transform:translate(-2px,-2px);
+  min-width:36px;height:36px;padding:0 8px;border-radius:999px;
+  display:grid;place-items:center;
+  background:var(--surface-2);border:1.5px solid var(--line-strong);
+  font-family:var(--f-mono);font-size:14px;font-weight:600;color:var(--fg);
+  box-shadow:0 6px 14px rgba(0,0,0,.45);
+  transition:border-color .2s,color .2s,transform .2s var(--ease);
 }
-.side strong.bust{color:var(--lose)}
-.side strong.bj{color:var(--accent)}
-.score .vs{width:1px;height:56px;background:var(--line-strong)}
+.badge:empty{display:none}
+.badge.bust{border-color:var(--lose);color:var(--lose)}
+.badge.bj{border-color:var(--accent);color:var(--accent)}
+
+/* Chip stack beside a hand */
+.hand-row{display:flex;align-items:flex-end;gap:18px}
+.stack{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:52px}
+.stack-amt{font-family:var(--f-mono);font-size:14px;font-weight:600;color:var(--accent)}
+.stack-chips{display:flex;flex-direction:column-reverse;align-items:center}
+.sc{
+  --c:var(--chip-5);
+  width:52px;height:16px;border-radius:50%;flex:none;
+  background:repeating-linear-gradient(90deg, var(--c) 0 7px, rgba(255,255,255,.85) 7px 10px);
+  box-shadow:0 2px 0 color-mix(in srgb, var(--c) 55%, #000), 0 0 0 1px rgba(0,0,0,.25);
+}
+.sc + .sc{margin-bottom:-10px}
+.stack-chips .sc:last-child{background:radial-gradient(ellipse at center, var(--c) 0 45%, rgba(255,255,255,.7) 46% 52%, var(--c) 53%)}
+.sc[data-v="25"]{--c:var(--chip-25)}
+.sc[data-v="100"]{--c:var(--chip-100)}
+.sc[data-v="500"]{--c:var(--chip-500)}
+.sc.drop{animation:drop .3s var(--ease) both}
+@keyframes drop{from{transform:translateY(-26px);opacity:0}to{transform:none;opacity:1}}
 .msg{
   font-family:var(--f-display);font-size:clamp(24px, 3.6vw, 34px);line-height:1.1;margin:0;min-height:1.1em;
   text-wrap:balance;transition:color .3s;
@@ -186,8 +209,6 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .hands.multi .hand:not(.active){opacity:.6}
 .hands.settled .hand{opacity:1}
 .hand-meta{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
-.hand-meta .bet{font-family:var(--f-mono)}
-.hands:not(.multi) .hand-meta .total{display:none}
 .pill{
   font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
   padding:3px 9px;border-radius:999px;border:1px solid currentColor;
@@ -195,14 +216,14 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .pill.win{color:var(--win)} .pill.lose{color:var(--lose)} .pill.push{color:var(--push)}
 
 .betspot{
-  width:96px;aspect-ratio:1;border-radius:50%;
+  min-width:110px;min-height:110px;border-radius:50%;
   border:1px dashed var(--line-strong);
-  display:grid;place-items:center;text-align:center;
+  display:grid;place-items:center;text-align:center;padding:12px;
   font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);
   transition:border-color .2s;
 }
-.betspot strong{display:block;font-family:var(--f-mono);font-size:20px;letter-spacing:0;color:var(--fg);font-weight:500}
 .betspot.has{border-color:var(--accent);border-style:solid}
+.betspot .stack-amt{letter-spacing:0}
 
 /* Dock */
 .dock{
@@ -313,6 +334,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
   .print{display:none}
 }
 @media (prefers-reduced-motion:reduce){
+  .sc.drop{animation:none}
   .card.enter{animation-duration:.01s}
   .card-inner,.stats,.toast{transition-duration:.01s}
 }
@@ -335,20 +357,15 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
     <div class="toast" id="toast" role="status"></div>
     <section class="zone dealer" aria-label="Dealer">
       <div class="label">Dealer</div>
-      <div class="cards" id="dCards"></div>
+      <div class="cardwrap"><span class="badge" id="dTotal"></span><div class="cards" id="dCards"></div></div>
     </section>
     <div class="center">
-      <div class="score" aria-live="polite">
-        <div class="side"><span>Dealer</span><strong id="scoreDealer">–</strong></div>
-        <span class="vs" aria-hidden="true"></span>
-        <div class="side"><span id="youLabel">You</span><strong id="scoreYou">–</strong></div>
-      </div>
       <p class="msg" id="msg" aria-live="polite">Place your bet</p>
       <div class="print"><span>Blackjack pays 3 to 2</span><span>Dealer stands on soft 17</span><span>Insurance pays 2 to 1</span></div>
     </div>
     <section class="zone player" aria-label="Your hands">
       <div class="hands" id="hands"></div>
-      <div class="betspot" id="betspot"><div>Bet<strong class="num" id="spotAmt">0</strong></div></div>
+      <div class="betspot" id="betspot"><div class="stack" id="spotStack"><span class="stack-amt num"></span><div class="stack-chips"></div></div><span id="spotEmpty">Place<br>your bet</span></div>
     </section>
   </main>
 
@@ -505,6 +522,28 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
     lose:['Lose','lose'], bust:['Bust','lose'], surrender:['Surrender','lose'],
   };
 
+  function setBadge(el, cards) {
+    const v = value(cards).total;
+    el.textContent = totalText(cards);
+    el.classList.toggle('bust', v > 21);
+    el.classList.toggle('bj', v === 21);
+  }
+
+  const CHIP_VALUES = [500, 100, 25, 5];
+  function renderStack(stack, amount) {
+    const chips = [];
+    let rest = Math.round(amount);
+    for (const v of CHIP_VALUES) while (rest >= v && chips.length < 14) { chips.push(v); rest -= v; }
+    stack.querySelector('.stack-amt').textContent = amount ? fmt(amount) : '';
+    const box = stack.querySelector('.stack-chips');
+    const key = chips.join(',');
+    if (box.dataset.key === key) return;
+    const prev = +(box.dataset.count || 0);
+    box.dataset.key = key;
+    box.dataset.count = chips.length;
+    box.innerHTML = chips.map((v, i) => `<i class="sc${i >= prev ? ' drop' : ''}" data-v="${v}" style="animation-delay:${(i - prev) * 40}ms"></i>`).join('');
+  }
+
   function render() {
     $('balance').textContent = fmt(S.balance);
     const left = S.shoe.length, full = DECKS * 52;
@@ -512,22 +551,15 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
     $('shoeFill').style.width = (left / full * 100) + '%';
 
     renderCards($('dCards'), S.dealer);
-    const setScore = (el, cards) => {
-      const v = value(cards).total;
-      el.textContent = totalText(cards) || '–';
-      el.classList.toggle('bust', v > 21);
-      el.classList.toggle('bj', v === 21);
-    };
-    const cur = S.hands[Math.min(S.active, S.hands.length - 1)];
-    setScore($('scoreDealer'), S.dealer);
-    setScore($('scoreYou'), cur ? cur.cards : []);
-    $('youLabel').textContent = S.hands.length > 1 ? `Hand ${S.active + 1}` : 'You';
+    setBadge($('dTotal'), S.dealer);
 
     const hb = $('hands');
     while (hb.children.length < S.hands.length) {
       const h = document.createElement('div');
       h.className = 'hand';
-      h.innerHTML = '<div class="cards"></div><div class="hand-meta"><span class="total num"></span><span class="bet num"></span><span class="pill" hidden></span></div>';
+      h.innerHTML = '<div class="hand-row"><div class="cardwrap"><span class="badge"></span><div class="cards"></div></div>' +
+        '<div class="stack"><span class="stack-amt num"></span><div class="stack-chips"></div></div></div>' +
+        '<div class="hand-meta"><span class="pill" hidden></span></div>';
       hb.appendChild(h);
     }
     while (hb.children.length > S.hands.length) hb.lastChild.remove();
@@ -537,8 +569,8 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
       const el = hb.children[i];
       renderCards(el.querySelector('.cards'), h.cards);
       el.classList.toggle('active', S.phase === 'player' && i === S.active && S.hands.length > 1);
-      el.querySelector('.total').textContent = totalText(h.cards);
-      el.querySelector('.bet').textContent = 'Bet ' + fmt(h.bet) + (h.doubled ? ' ×2' : '');
+      setBadge(el.querySelector('.badge'), h.cards);
+      renderStack(el.querySelector('.stack'), h.bet);
       const pill = el.querySelector('.pill');
       if (h.result) {
         const [label, tone] = RESULT[h.result];
@@ -551,7 +583,9 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
     const spot = $('betspot');
     spot.hidden = S.hands.length > 0;
     spot.classList.toggle('has', S.bet > 0);
-    $('spotAmt').textContent = fmt(S.bet);
+    $('spotStack').hidden = !S.bet;
+    $('spotEmpty').hidden = !!S.bet;
+    renderStack($('spotStack'), S.bet);
 
     const msg = $('msg');
     msg.textContent = S.msg;
