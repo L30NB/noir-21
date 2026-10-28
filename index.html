@@ -1,0 +1,859 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Noir Twenty-One</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one-screen table. Dealer on top, felt print in the middle, player hands below, a control dock at the bottom; stats slide in from the right. */
+:root{
+  --bg:#0b0e0d;
+  --felt:#101614;
+  --surface:#161c1a;
+  --surface-2:#1d2421;
+  --line:rgba(232,228,216,.08);
+  --line-strong:rgba(232,228,216,.18);
+  --fg:#ebe7dc;
+  --muted:#858d88;
+  --accent:#cdb072;
+  --accent-ink:#17140b;
+  --card:#f3f1eb;
+  --card-ink:#17191a;
+  --card-red:#b23a30;
+  --win:#8bc8a2;
+  --lose:#e3826f;
+  --push:#a7aeaa;
+  --chip-5:#d8d3c5;
+  --chip-25:#7fae94;
+  --chip-100:#829ac6;
+  --chip-500:#cdb072;
+  --f-display:"Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --f-body:"Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --cw:clamp(56px, 8.4vw, 92px);
+  --ease:cubic-bezier(.2,.8,.2,1);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font-family:var(--f-body);
+  font-size:14px;
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+  overflow:hidden;
+}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.num{font-variant-numeric:tabular-nums}
+
+.app{
+  height:100%;
+  display:grid;
+  grid-template-rows:auto 1fr auto;
+  max-width:1200px;
+  margin:0 auto;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+}
+
+/* Header */
+.bar{
+  display:flex;align-items:center;gap:20px;
+  padding-block:16px 12px;
+  border-bottom:1px solid var(--line);
+}
+.brand{font-family:var(--f-display);font-size:26px;line-height:1;letter-spacing:.01em;margin:0;font-weight:400}
+.brand em{color:var(--accent)}
+.bar .spacer{flex:1}
+.shoe{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+.shoe .track{width:56px;height:3px;background:var(--line-strong);border-radius:2px;overflow:hidden}
+.shoe .fill{height:100%;background:var(--muted);transition:width .4s var(--ease)}
+.balance{display:flex;flex-direction:column;align-items:flex-end;line-height:1.1}
+.balance small{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.balance strong{font-family:var(--f-mono);font-weight:500;font-size:18px}
+.ghost{
+  background:none;border:1px solid var(--line-strong);border-radius:999px;
+  padding:7px 14px;font-size:13px;transition:border-color .2s,background .2s;
+}
+.ghost:hover{border-color:var(--accent)}
+
+/* Table */
+.table{
+  position:relative;
+  display:grid;
+  grid-template-rows:1fr auto 1.25fr;
+  min-height:0;
+  overflow-y:auto;
+  padding-block:20px;
+  background:radial-gradient(120% 80% at 50% 45%, var(--felt), var(--bg) 70%);
+}
+.zone{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-width:0}
+.zone.dealer{justify-content:flex-end}
+.zone.player{justify-content:flex-start}
+.label{
+  display:flex;align-items:center;gap:10px;
+  font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);
+}
+.total{
+  font-family:var(--f-mono);font-size:12px;letter-spacing:0;text-transform:none;color:var(--fg);
+  border:1px solid var(--line-strong);border-radius:999px;padding:2px 9px;min-width:2.4em;text-align:center;
+}
+.total:empty{display:none}
+
+.center{display:flex;flex-direction:column;align-items:center;gap:6px;padding-block:22px;text-align:center}
+.msg{
+  font-family:var(--f-display);font-size:clamp(24px, 3.6vw, 34px);line-height:1.1;margin:0;min-height:1.1em;
+  text-wrap:balance;transition:color .3s;
+}
+.msg.win{color:var(--win)} .msg.lose{color:var(--lose)} .msg.push{color:var(--push)}
+.print{
+  font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);opacity:.7;
+  display:flex;flex-wrap:wrap;justify-content:center;gap:4px 14px;
+}
+
+/* Cards */
+.cards{display:flex;align-items:flex-start;min-height:calc(var(--cw) * 1.4);padding-inline:4px}
+.card{
+  width:var(--cw);aspect-ratio:5/7;flex:none;perspective:900px;
+}
+.cards .card + .card{margin-left:calc(var(--cw) * -.6)}
+.card-inner{
+  position:relative;width:100%;height:100%;
+  transform-style:preserve-3d;transition:transform .5s var(--ease);
+}
+.card.down .card-inner{transform:rotateY(180deg)}
+.face{
+  position:absolute;inset:0;border-radius:calc(var(--cw) * .085);
+  backface-visibility:hidden;-webkit-backface-visibility:hidden;
+  box-shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 8px 22px rgba(0,0,0,.45);
+}
+.front{background:var(--card);color:var(--card-ink)}
+.front.red{color:var(--card-red)}
+.front .corner{
+  position:absolute;top:7%;left:9%;display:flex;flex-direction:column;align-items:center;line-height:.9;
+}
+.front .corner.br{top:auto;left:auto;bottom:7%;right:9%;transform:rotate(180deg)}
+.front .rank{font-family:var(--f-display);font-size:calc(var(--cw) * .32)}
+.front .suit{font-size:calc(var(--cw) * .17)}
+.front .pip{
+  position:absolute;inset:0;display:grid;place-items:center;
+  font-size:calc(var(--cw) * .46);opacity:.92;
+}
+.back{
+  transform:rotateY(180deg);
+  background:
+    repeating-linear-gradient(45deg, transparent 0 5px, rgba(205,176,114,.16) 5px 6px),
+    repeating-linear-gradient(-45deg, transparent 0 5px, rgba(205,176,114,.16) 5px 6px),
+    var(--surface-2);
+  border:1px solid var(--line-strong);
+  outline:1px solid rgba(205,176,114,.35);outline-offset:-6px;
+}
+.card.enter{animation:deal .45s var(--ease) both}
+@keyframes deal{
+  from{transform:translate(38vw,-34vh) rotate(-14deg);opacity:0}
+  to{transform:none;opacity:1}
+}
+
+/* Hands */
+.hands{display:flex;flex-wrap:wrap;justify-content:center;gap:18px 34px;max-width:100%}
+.hand{
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  padding:10px 12px 12px;border-radius:14px;border:1px solid transparent;
+  transition:border-color .25s,opacity .25s;min-width:0;
+}
+.hand.active{border-color:var(--line-strong);background:rgba(255,255,255,.015)}
+.hands.multi .hand:not(.active){opacity:.6}
+.hands.settled .hand{opacity:1}
+.hand-meta{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.hand-meta .bet{font-family:var(--f-mono)}
+.pill{
+  font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 9px;border-radius:999px;border:1px solid currentColor;
+}
+.pill.win{color:var(--win)} .pill.lose{color:var(--lose)} .pill.push{color:var(--push)}
+
+.betspot{
+  width:96px;aspect-ratio:1;border-radius:50%;
+  border:1px dashed var(--line-strong);
+  display:grid;place-items:center;text-align:center;
+  font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);
+  transition:border-color .2s;
+}
+.betspot strong{display:block;font-family:var(--f-mono);font-size:20px;letter-spacing:0;color:var(--fg);font-weight:500}
+.betspot.has{border-color:var(--accent);border-style:solid}
+
+/* Dock */
+.dock{
+  border-top:1px solid var(--line);
+  padding-block:14px 18px;
+  display:flex;justify-content:center;
+  min-height:96px;
+}
+.group{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px 14px;width:100%}
+.chips{display:flex;gap:10px}
+.chip{
+  --c:var(--chip-5);
+  width:54px;aspect-ratio:1;border-radius:50%;border:none;padding:0;
+  background:
+    radial-gradient(circle, var(--surface) 0 56%, transparent 57%),
+    repeating-conic-gradient(var(--c) 0 12deg, transparent 12deg 30deg),
+    var(--surface-2);
+  box-shadow:0 0 0 1.5px var(--c) inset, 0 6px 14px rgba(0,0,0,.35);
+  font-family:var(--f-mono);font-size:13px;font-weight:500;color:var(--c);
+  transition:transform .15s var(--ease);
+  position:relative;
+}
+.chip:hover:not(:disabled){transform:translateY(-3px)}
+.chip:active:not(:disabled){transform:translateY(0) scale(.96)}
+.chip:disabled{opacity:.28;cursor:not-allowed}
+.chip[data-v="25"]{--c:var(--chip-25)}
+.chip[data-v="100"]{--c:var(--chip-100)}
+.chip[data-v="500"]{--c:var(--chip-500)}
+
+.btn{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:11px 18px;border-radius:10px;
+  background:var(--surface);border:1px solid var(--line-strong);
+  font-size:14px;font-weight:500;
+  transition:background .15s,border-color .15s,opacity .15s,transform .1s;
+}
+.btn:hover:not(:disabled){background:var(--surface-2);border-color:rgba(232,228,216,.3)}
+.btn:active:not(:disabled){transform:scale(.97)}
+.btn:disabled{opacity:.3;cursor:not-allowed}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover:not(:disabled){background:#dabf83;border-color:#dabf83}
+.btn kbd{
+  font-family:var(--f-mono);font-size:10px;line-height:1;
+  padding:3px 5px;border-radius:4px;border:1px solid currentColor;opacity:.5;
+}
+.betinfo{font-size:12px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+.betinfo strong{font-family:var(--f-mono);font-size:15px;color:var(--fg);letter-spacing:0;font-weight:500;margin-left:6px}
+.sep{width:1px;height:28px;background:var(--line-strong)}
+.prompt{font-size:14px;color:var(--fg)}
+.prompt span{color:var(--muted)}
+
+/* Toast */
+.toast{
+  position:absolute;left:50%;top:12px;transform:translate(-50%,-8px);
+  background:var(--surface-2);border:1px solid var(--line-strong);border-radius:999px;
+  padding:7px 14px;font-size:12px;opacity:0;pointer-events:none;
+  transition:opacity .25s,transform .25s var(--ease);white-space:nowrap;z-index:5;
+}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* Stats drawer */
+.stats{
+  position:fixed;top:0;right:0;bottom:0;z-index:20;
+  width:min(340px, 100%);
+  background:var(--surface);border-left:1px solid var(--line-strong);
+  padding:calc(20px + env(safe-area-inset-top, 0px)) calc(22px + env(safe-area-inset-right, 0px)) calc(20px + env(safe-area-inset-bottom, 0px)) 22px;
+  transform:translateX(102%);transition:transform .35s var(--ease);
+  display:flex;flex-direction:column;gap:20px;overflow-y:auto;
+}
+.stats.open{transform:none;box-shadow:-24px 0 60px rgba(0,0,0,.5)}
+.stats-head{display:flex;align-items:center;justify-content:space-between}
+.stats h2{font-family:var(--f-display);font-weight:400;font-size:26px;margin:0}
+.rate{display:flex;align-items:baseline;gap:10px}
+.rate strong{font-family:var(--f-display);font-size:56px;line-height:1;font-weight:400}
+.rate span{color:var(--muted);font-size:12px}
+.ratebar{display:flex;height:4px;border-radius:2px;overflow:hidden;background:var(--line-strong)}
+.ratebar i{display:block;height:100%;transition:width .4s var(--ease)}
+.ratebar .w{background:var(--win)} .ratebar .p{background:var(--push)} .ratebar .l{background:var(--lose)}
+.statlist{display:grid;grid-template-columns:1fr auto;margin:0;border-top:1px solid var(--line)}
+.statlist dt,.statlist dd{padding:9px 0;border-bottom:1px solid var(--line);margin:0}
+.statlist dt{color:var(--muted)}
+.statlist dd{font-family:var(--f-mono);text-align:right}
+.keys h3{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:500;margin:0 0 10px}
+.keys ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;color:var(--muted)}
+.keys kbd{font-family:var(--f-mono);font-size:11px;color:var(--fg);border:1px solid var(--line-strong);border-radius:4px;padding:1px 5px;margin-right:6px}
+.danger{color:var(--lose);border-color:rgba(227,130,111,.4)}
+.danger.armed{background:var(--lose);color:var(--accent-ink);border-color:var(--lose)}
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:15;opacity:0;pointer-events:none;transition:opacity .3s}
+.scrim.show{opacity:1;pointer-events:auto}
+
+@media (hover:none){ .btn kbd{display:none} .keys{display:none} }
+@media (max-width:640px){
+  .bar{gap:12px}
+  .shoe{display:none}
+  .brand{font-size:22px}
+  .chip{width:48px}
+  .btn{padding:10px 13px}
+  .sep{display:none}
+  .table{padding-block:12px}
+  .center{padding-block:12px}
+  .print{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .card.enter{animation-duration:.01s}
+  .card-inner,.stats,.toast{transition-duration:.01s}
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="bar">
+    <h1 class="brand">Noir <em>21</em></h1>
+    <div class="shoe" title="Cards left in the six-deck shoe">
+      <span>Shoe</span><div class="track"><div class="fill" id="shoeFill"></div></div><span class="num" id="shoeCount"></span>
+    </div>
+    <div class="spacer"></div>
+    <div class="balance"><small>Balance</small><strong class="num" id="balance">1,000</strong></div>
+    <button class="ghost" id="statsBtn" aria-controls="stats" aria-expanded="false">Stats</button>
+  </header>
+
+  <main class="table">
+    <div class="toast" id="toast" role="status"></div>
+    <section class="zone dealer" aria-label="Dealer">
+      <div class="label">Dealer <span class="total num" id="dTotal"></span></div>
+      <div class="cards" id="dCards"></div>
+    </section>
+    <div class="center">
+      <p class="msg" id="msg" aria-live="polite">Place your bet</p>
+      <div class="print"><span>Blackjack pays 3 to 2</span><span>Dealer stands on soft 17</span><span>Insurance pays 2 to 1</span></div>
+    </div>
+    <section class="zone player" aria-label="Your hands">
+      <div class="hands" id="hands"></div>
+      <div class="betspot" id="betspot"><div>Bet<strong class="num" id="spotAmt">0</strong></div></div>
+    </section>
+  </main>
+
+  <footer class="dock">
+    <div class="group" id="gBet">
+      <div class="chips">
+        <button class="chip" data-v="5" aria-label="Add 5">5</button>
+        <button class="chip" data-v="25" aria-label="Add 25">25</button>
+        <button class="chip" data-v="100" aria-label="Add 100">100</button>
+        <button class="chip" data-v="500" aria-label="Add 500">500</button>
+      </div>
+      <span class="sep"></span>
+      <button class="btn" id="clearBtn">Clear <kbd>C</kbd></button>
+      <button class="btn primary" id="dealBtn">Deal <kbd>Space</kbd></button>
+      <button class="btn primary" id="refillBtn" hidden>Reset bankroll to 1,000</button>
+    </div>
+    <div class="group" id="gIns" hidden>
+      <span class="prompt">Dealer shows an Ace. Insurance <span id="insCost"></span>?</span>
+      <button class="btn" id="insYes">Take it <kbd>I</kbd></button>
+      <button class="btn" id="insNo">No thanks <kbd>N</kbd></button>
+    </div>
+    <div class="group" id="gPlay" hidden>
+      <button class="btn primary" id="hitBtn">Hit <kbd>H</kbd></button>
+      <button class="btn" id="standBtn">Stand <kbd>S</kbd></button>
+      <button class="btn" id="doubleBtn">Double <kbd>D</kbd></button>
+      <button class="btn" id="splitBtn">Split <kbd>P</kbd></button>
+      <button class="btn" id="surrBtn">Surrender <kbd>R</kbd></button>
+    </div>
+  </footer>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="stats" id="stats" aria-label="Statistics">
+  <div class="stats-head"><h2>Session</h2><button class="ghost" id="closeStats">Close</button></div>
+  <div>
+    <div class="rate"><strong class="num" id="sRate">0%</strong><span>hands won</span></div>
+    <div class="ratebar" aria-hidden="true"><i class="w" id="bW"></i><i class="p" id="bP"></i><i class="l" id="bL"></i></div>
+  </div>
+  <dl class="statlist">
+    <dt>Hands played</dt><dd id="sHands">0</dd>
+    <dt>Won · pushed · lost</dt><dd id="sWPL">0 · 0 · 0</dd>
+    <dt>Blackjacks</dt><dd id="sBJ">0</dd>
+    <dt>Current streak</dt><dd id="sStreak">–</dd>
+    <dt>Best win streak</dt><dd id="sBest">0</dd>
+    <dt>Net result</dt><dd id="sNet">0</dd>
+    <dt>Peak balance</dt><dd id="sPeak">1,000</dd>
+  </dl>
+  <div class="keys">
+    <h3>Keyboard</h3>
+    <ul>
+      <li><kbd>1–4</kbd>Add chip</li><li><kbd>Space</kbd>Deal</li>
+      <li><kbd>C</kbd>Clear bet</li><li><kbd>H</kbd>Hit</li>
+      <li><kbd>S</kbd>Stand</li><li><kbd>D</kbd>Double</li>
+      <li><kbd>P</kbd>Split</li><li><kbd>R</kbd>Surrender</li>
+      <li><kbd>I</kbd>/<kbd>N</kbd>Insurance</li><li><kbd>T</kbd>Stats</li>
+    </ul>
+  </div>
+  <button class="btn danger" id="resetBtn">Reset stats and bankroll</button>
+</aside>
+
+<script>
+(() => {
+  const START = 1000, DECKS = 6, MAX_HANDS = 4;
+  const SUITS = ['♠','♥','♦','♣'];
+  const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const D = reduce ? 90 : 360;
+  const $ = id => document.getElementById(id);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const fmt = n => {
+    const v = Math.round(n * 100) / 100;
+    return v.toLocaleString('en-US', { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 });
+  };
+  const signed = n => (n > 0 ? '+' : n < 0 ? '−' : '') + fmt(Math.abs(n));
+
+  const freshStats = () => ({ hands:0, wins:0, losses:0, pushes:0, bj:0, streak:0, best:0, net:0, peak:START });
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem('noir21') || 'null'); } catch (e) {}
+
+  const S = {
+    balance: saved?.balance ?? START,
+    stats: { ...freshStats(), ...(saved?.stats || {}) },
+    lastBet: saved?.lastBet ?? 25,
+    bet: 0,
+    shoe: [],
+    dealer: [],
+    hands: [],
+    active: 0,
+    insurance: 0,
+    phase: 'betting',
+    busy: false,
+    msg: 'Place your bet',
+    tone: '',
+  };
+  S.bet = S.lastBet <= S.balance ? S.lastBet : 0;
+
+  const save = () => {
+    try { localStorage.setItem('noir21', JSON.stringify({ balance:S.balance, stats:S.stats, lastBet:S.lastBet })); } catch (e) {}
+  };
+
+  /* ---------- Cards ---------- */
+  let uid = 0;
+  function newShoe() {
+    const s = [];
+    for (let d = 0; d < DECKS; d++) for (const su of SUITS) for (const r of RANKS) s.push({ r, s:su, id:++uid });
+    for (let i = s.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [s[i], s[j]] = [s[j], s[i]]; }
+    return s;
+  }
+  const cardVal = c => c.r === 'A' ? 11 : 'JQK'.includes(c.r) || c.r === '10' ? 10 : +c.r;
+  function value(cards) {
+    let t = 0, aces = 0;
+    for (const c of cards) { if (c.hidden) continue; t += cardVal(c); if (c.r === 'A') aces++; }
+    while (t > 21 && aces) { t -= 10; aces--; }
+    return { total:t, soft:aces > 0 && t <= 21 };
+  }
+  const isNatural = (cards, h) => cards.length === 2 && value(cards).total === 21 && !(h && h.fromSplit);
+
+  /* ---------- Rendering ---------- */
+  const cardEls = new Map();
+  function cardEl(c) {
+    let el = cardEls.get(c.id);
+    if (!el) {
+      el = document.createElement('div');
+      const red = c.s === '♥' || c.s === '♦';
+      el.className = 'card enter';
+      el.innerHTML =
+        `<div class="card-inner"><div class="face front${red ? ' red' : ''}">` +
+        `<div class="corner"><span class="rank">${c.r}</span><span class="suit">${c.s}</span></div>` +
+        `<div class="pip">${c.s}</div>` +
+        `<div class="corner br"><span class="rank">${c.r}</span><span class="suit">${c.s}</span></div>` +
+        `</div><div class="face back"></div></div>`;
+      el.addEventListener('animationend', () => el.classList.remove('enter'), { once:true });
+      cardEls.set(c.id, el);
+    }
+    el.classList.toggle('down', !!c.hidden);
+    el.setAttribute('aria-label', c.hidden ? 'Face-down card' : `${c.r} of ${c.s}`);
+    return el;
+  }
+  function renderCards(box, cards) {
+    cards.forEach((c, i) => {
+      const el = cardEl(c);
+      if (box.children[i] !== el) box.insertBefore(el, box.children[i] || null);
+    });
+    while (box.children.length > cards.length) box.lastChild.remove();
+  }
+  const totalText = cards => {
+    if (!cards.length) return '';
+    const v = value(cards);
+    if (cards.length === 2 && !cards.some(c => c.hidden) && v.total === 21) return '21';
+    return v.soft && v.total < 21 ? `${v.total - 10}/${v.total}` : String(v.total);
+  };
+  const RESULT = {
+    win:['Win','win'], blackjack:['Blackjack','win'], push:['Push','push'],
+    lose:['Lose','lose'], bust:['Bust','lose'], surrender:['Surrender','lose'],
+  };
+
+  function render() {
+    $('balance').textContent = fmt(S.balance);
+    const left = S.shoe.length, full = DECKS * 52;
+    $('shoeCount').textContent = left;
+    $('shoeFill').style.width = (left / full * 100) + '%';
+
+    renderCards($('dCards'), S.dealer);
+    $('dTotal').textContent = totalText(S.dealer);
+
+    const hb = $('hands');
+    while (hb.children.length < S.hands.length) {
+      const h = document.createElement('div');
+      h.className = 'hand';
+      h.innerHTML = '<div class="cards"></div><div class="hand-meta"><span class="total num"></span><span class="bet num"></span><span class="pill" hidden></span></div>';
+      hb.appendChild(h);
+    }
+    while (hb.children.length > S.hands.length) hb.lastChild.remove();
+    hb.classList.toggle('multi', S.hands.length > 1);
+    hb.classList.toggle('settled', S.phase === 'betting');
+    S.hands.forEach((h, i) => {
+      const el = hb.children[i];
+      renderCards(el.querySelector('.cards'), h.cards);
+      el.classList.toggle('active', S.phase === 'player' && i === S.active && S.hands.length > 1);
+      el.querySelector('.total').textContent = totalText(h.cards);
+      el.querySelector('.bet').textContent = 'Bet ' + fmt(h.bet) + (h.doubled ? ' ×2' : '');
+      const pill = el.querySelector('.pill');
+      if (h.result) {
+        const [label, tone] = RESULT[h.result];
+        pill.textContent = h.net ? `${label} ${signed(h.net)}` : label;
+        pill.className = 'pill ' + tone;
+        pill.hidden = false;
+      } else pill.hidden = true;
+    });
+
+    const spot = $('betspot');
+    spot.hidden = S.hands.length > 0;
+    spot.classList.toggle('has', S.bet > 0);
+    $('spotAmt').textContent = fmt(S.bet);
+
+    const msg = $('msg');
+    msg.textContent = S.msg;
+    msg.className = 'msg ' + S.tone;
+
+    // dock
+    $('gBet').hidden = S.phase !== 'betting';
+    $('gIns').hidden = S.phase !== 'insurance';
+    $('gPlay').hidden = !(S.phase === 'player' || S.phase === 'dealer');
+    const broke = S.balance < 5 && S.bet === 0;
+    document.querySelectorAll('.chip').forEach(ch => ch.disabled = S.busy || S.bet + +ch.dataset.v > S.balance);
+    $('clearBtn').disabled = S.busy || S.bet === 0;
+    $('dealBtn').disabled = S.busy || S.bet === 0 || S.bet > S.balance;
+    $('dealBtn').innerHTML = (S.bet ? `Deal ${fmt(S.bet)}` : 'Deal') + ' <kbd>Space</kbd>';
+    $('dealBtn').hidden = broke;
+    $('clearBtn').hidden = broke;
+    $('refillBtn').hidden = !broke;
+
+    const h = S.hands[S.active];
+    const playing = S.phase === 'player' && !S.busy && h;
+    $('hitBtn').disabled = !playing;
+    $('standBtn').disabled = !playing;
+    $('doubleBtn').disabled = !(playing && canDouble(h));
+    $('splitBtn').disabled = !(playing && canSplit(h));
+    $('surrBtn').disabled = !(playing && canSurrender(h));
+    $('insYes').disabled = $('insNo').disabled = S.busy;
+    if (S.phase === 'insurance') $('insCost').textContent = 'for ' + fmt(S.hands[0].bet / 2);
+
+    renderStats();
+  }
+
+  function renderStats() {
+    const st = S.stats;
+    const rate = st.hands ? Math.round(st.wins / st.hands * 100) : 0;
+    $('sRate').textContent = rate + '%';
+    const pct = n => st.hands ? (n / st.hands * 100) + '%' : '0%';
+    $('bW').style.width = pct(st.wins); $('bP').style.width = pct(st.pushes); $('bL').style.width = pct(st.losses);
+    $('sHands').textContent = st.hands;
+    $('sWPL').textContent = `${st.wins} · ${st.pushes} · ${st.losses}`;
+    $('sBJ').textContent = st.bj;
+    $('sStreak').textContent = st.streak > 0 ? `${st.streak} won` : st.streak < 0 ? `${-st.streak} lost` : '–';
+    $('sBest').textContent = st.best;
+    $('sNet').textContent = signed(st.net) || '0';
+    $('sPeak').textContent = fmt(st.peak);
+  }
+
+  let toastT;
+  function toast(text) {
+    const t = $('toast');
+    t.textContent = text; t.classList.add('show');
+    clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 1800);
+  }
+  const say = (text, tone = '') => { S.msg = text; S.tone = tone; };
+
+  /* ---------- Rules ---------- */
+  const canDouble = h => h.cards.length === 2 && !h.splitAces && S.balance >= h.bet;
+  const canSplit = h => h.cards.length === 2 && cardVal(h.cards[0]) === cardVal(h.cards[1]) && !h.splitAces
+    && S.hands.length < MAX_HANDS && S.balance >= h.bet;
+  const canSurrender = h => S.hands.length === 1 && h.cards.length === 2 && !h.fromSplit;
+
+  async function draw(target, hidden = false) {
+    const c = S.shoe.pop();
+    c.hidden = hidden;
+    target.push(c);
+    render();
+    await sleep(D);
+    return c;
+  }
+
+  async function act(fn) {
+    if (S.busy) return;
+    S.busy = true; render();
+    try { await fn(); } finally { S.busy = false; render(); }
+  }
+
+  /* ---------- Flow ---------- */
+  async function deal() {
+    if (S.phase !== 'betting' || !S.bet || S.bet > S.balance) return;
+    if (S.shoe.length < DECKS * 52 * 0.25) { S.shoe = newShoe(); toast('New shoe shuffled'); }
+    cardEls.clear();
+    $('dCards').innerHTML = ''; $('hands').innerHTML = '';
+    S.balance -= S.bet;
+    S.lastBet = S.bet;
+    S.dealer = [];
+    S.hands = [{ cards:[], bet:S.bet }];
+    S.active = 0; S.insurance = 0;
+    S.phase = 'dealing';
+    say('');
+    render();
+
+    const h = S.hands[0];
+    await draw(h.cards);
+    await draw(S.dealer);
+    await draw(h.cards);
+    await draw(S.dealer, true);
+
+    if (S.dealer[0].r === 'A' && S.balance >= h.bet / 2) {
+      S.phase = 'insurance';
+      say(isNatural(h.cards) ? 'Blackjack. Insure it?' : 'Insurance?');
+      return;
+    }
+    await peek();
+  }
+
+  async function answerInsurance(take) {
+    if (S.phase !== 'insurance') return;
+    if (take) { S.insurance = S.hands[0].bet / 2; S.balance -= S.insurance; }
+    S.phase = 'dealing';
+    await peek();
+  }
+
+  async function peek() {
+    const up = cardVal(S.dealer[0]);
+    const dealerBJ = (up === 10 || up === 11) && cardVal(S.dealer[1]) + up === 21;
+    const h = S.hands[0];
+    if (dealerBJ || isNatural(h.cards)) {
+      await reveal();
+      return settle();
+    }
+    if (S.insurance) toast(`No dealer blackjack. Insurance lost (−${fmt(S.insurance)})`);
+    else if (up >= 10) toast('Dealer checked: no blackjack');
+    S.phase = 'player';
+    say(handPrompt());
+    if (value(h.cards).total === 21) return next();
+  }
+
+  function handPrompt() {
+    if (S.hands.length > 1) return `Hand ${S.active + 1} of ${S.hands.length}`;
+    return 'Your move';
+  }
+
+  async function reveal() {
+    const hole = S.dealer[1];
+    if (hole && hole.hidden) { hole.hidden = false; render(); await sleep(D + 200); }
+  }
+
+  async function finishHand() {
+    S.hands[S.active].done = true;
+    await next();
+  }
+
+  async function next() {
+    const i = S.hands.findIndex(h => !h.done);
+    if (i === -1) return dealerPlay();
+    S.active = i;
+    const h = S.hands[i];
+    S.phase = 'player';
+    say(handPrompt());
+    render();
+    if (h.cards.length === 1) {
+      await draw(h.cards);
+      if (h.splitAces) return finishHand();
+    }
+    if (value(h.cards).total >= 21) return finishHand();
+  }
+
+  async function hit() {
+    const h = S.hands[S.active];
+    await draw(h.cards);
+    if (value(h.cards).total >= 21) await finishHand();
+  }
+
+  async function double() {
+    const h = S.hands[S.active];
+    if (!canDouble(h)) return;
+    S.balance -= h.bet; h.bet *= 2; h.doubled = true;
+    await draw(h.cards);
+    await finishHand();
+  }
+
+  async function split() {
+    const h = S.hands[S.active];
+    if (!canSplit(h)) return;
+    const moved = h.cards.pop();
+    const aces = moved.r === 'A';
+    const nh = { cards:[moved], bet:h.bet, fromSplit:true, splitAces:aces };
+    h.fromSplit = true; h.splitAces = aces;
+    S.balance -= h.bet;
+    S.hands.splice(S.active + 1, 0, nh);
+    say(handPrompt());
+    render();
+    await sleep(D / 2);
+    await draw(h.cards);
+    if (aces) {
+      await draw(nh.cards);
+      h.done = nh.done = true;
+      return next();
+    }
+    if (value(h.cards).total === 21) await finishHand();
+  }
+
+  async function surrender() {
+    const h = S.hands[S.active];
+    if (!canSurrender(h)) return;
+    h.surrendered = true; h.done = true;
+    await next();
+  }
+
+  async function dealerPlay() {
+    S.phase = 'dealer';
+    say('Dealer’s turn');
+    render();
+    await reveal();
+    const live = S.hands.some(h => !h.surrendered && value(h.cards).total <= 21 && !(S.hands.length === 1 && isNatural(h.cards)));
+    if (live) while (value(S.dealer).total < 17) await draw(S.dealer);
+    settle();
+  }
+
+  function settle() {
+    const d = value(S.dealer).total;
+    const dealerBJ = isNatural(S.dealer);
+    const st = S.stats;
+    let wagered = S.insurance, returned = 0, naturals = 0;
+    if (S.insurance && dealerBJ) returned += S.insurance * 3;
+    for (const h of S.hands) {
+      wagered += h.bet;
+      const v = value(h.cards).total;
+      const natural = S.hands.length === 1 && isNatural(h.cards, h);
+      let pay = 0, res;
+      if (h.surrendered) { pay = h.bet / 2; res = 'surrender'; }
+      else if (v > 21) res = 'bust';
+      else if (natural && !dealerBJ) { pay = h.bet * 2.5; res = 'blackjack'; }
+      else if (natural && dealerBJ) { pay = h.bet; res = 'push'; }
+      else if (dealerBJ) res = 'lose';
+      else if (d > 21 || v > d) { pay = h.bet * 2; res = 'win'; }
+      else if (v === d) { pay = h.bet; res = 'push'; }
+      else res = 'lose';
+      h.result = res; h.net = pay - h.bet; returned += pay;
+      st.hands++;
+      if (res === 'win' || res === 'blackjack') st.wins++;
+      else if (res === 'push') st.pushes++;
+      else st.losses++;
+      if (res === 'blackjack') { st.bj++; naturals++; }
+    }
+    S.balance += returned;
+    const net = returned - wagered;
+    st.net += net;
+    if (net > 0) st.streak = st.streak > 0 ? st.streak + 1 : 1;
+    else if (net < 0) st.streak = st.streak < 0 ? st.streak - 1 : -1;
+    st.best = Math.max(st.best, st.streak);
+    st.peak = Math.max(st.peak, S.balance);
+
+    if (naturals && net > 0) say(`Blackjack · ${signed(net)}`, 'win');
+    else if (dealerBJ && net < 0) say(`Dealer blackjack · ${signed(net)}`, 'lose');
+    else if (dealerBJ && S.insurance && net >= 0) say(`Insurance paid · ${net ? signed(net) : 'even'}`, net > 0 ? 'win' : 'push');
+    else if (net > 0) say((d > 21 ? 'Dealer busts · ' : 'You win · ') + signed(net), 'win');
+    else if (net < 0) say('Dealer wins · ' + signed(net), 'lose');
+    else say('Push', 'push');
+
+    S.phase = 'betting';
+    S.bet = S.lastBet <= S.balance ? S.lastBet : 0;
+    save();
+  }
+
+  /* ---------- Betting ---------- */
+  function addChip(v) {
+    if (S.phase !== 'betting' || S.busy) return;
+    if (S.bet + v > S.balance) { toast('Not enough chips for that'); return; }
+    S.bet += v;
+    render();
+  }
+  function clearBet() {
+    if (S.phase !== 'betting' || S.busy) return;
+    S.bet = 0; render();
+  }
+  function refill() {
+    S.balance = START; S.bet = Math.min(S.lastBet, START);
+    say('Fresh bankroll. Place your bet');
+    save(); render();
+  }
+
+  /* ---------- Stats drawer ---------- */
+  function toggleStats(open) {
+    const panel = $('stats');
+    const show = open ?? !panel.classList.contains('open');
+    panel.classList.toggle('open', show);
+    $('scrim').classList.toggle('show', show);
+    $('statsBtn').setAttribute('aria-expanded', show);
+  }
+  let armT;
+  $('resetBtn').addEventListener('click', e => {
+    const b = e.currentTarget;
+    if (!b.classList.contains('armed')) {
+      b.classList.add('armed'); b.textContent = 'Click again to confirm';
+      clearTimeout(armT);
+      armT = setTimeout(() => { b.classList.remove('armed'); b.textContent = 'Reset stats and bankroll'; }, 3000);
+      return;
+    }
+    clearTimeout(armT);
+    b.classList.remove('armed'); b.textContent = 'Reset stats and bankroll';
+    if (S.phase !== 'betting') { toast('Finish the current hand first'); return; }
+    S.stats = freshStats(); S.balance = START; S.lastBet = 25; S.bet = 25;
+    say('Place your bet'); save(); render(); toast('Stats and bankroll reset');
+  });
+
+  /* ---------- Wiring ---------- */
+  document.querySelectorAll('.chip').forEach(ch => ch.addEventListener('click', () => addChip(+ch.dataset.v)));
+  $('clearBtn').onclick = clearBet;
+  $('dealBtn').onclick = () => act(deal);
+  $('refillBtn').onclick = refill;
+  $('insYes').onclick = () => act(() => answerInsurance(true));
+  $('insNo').onclick = () => act(() => answerInsurance(false));
+  const playAct = fn => () => { if (S.phase === 'player') act(fn); };
+  $('hitBtn').onclick = playAct(hit);
+  $('standBtn').onclick = playAct(finishHand);
+  $('doubleBtn').onclick = playAct(double);
+  $('splitBtn').onclick = playAct(split);
+  $('surrBtn').onclick = playAct(surrender);
+  $('statsBtn').onclick = () => toggleStats();
+  $('closeStats').onclick = () => toggleStats(false);
+  $('scrim').onclick = () => toggleStats(false);
+
+  const CHIP_KEYS = { '1':5, '2':25, '3':100, '4':500 };
+  document.addEventListener('keydown', e => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key.toLowerCase();
+    if (k === 'escape') return toggleStats(false);
+    if (k === 't') return toggleStats();
+    if (S.phase === 'betting') {
+      if (CHIP_KEYS[k]) addChip(CHIP_KEYS[k]);
+      else if (k === 'c' || k === 'backspace') clearBet();
+      else if (k === ' ' || k === 'enter') {
+        if (document.activeElement && document.activeElement.tagName === 'BUTTON' && k === 'enter') return;
+        e.preventDefault(); act(deal);
+      }
+    } else if (S.phase === 'insurance') {
+      if (k === 'i' || k === 'y') act(() => answerInsurance(true));
+      else if (k === 'n') act(() => answerInsurance(false));
+    } else if (S.phase === 'player') {
+      const map = { h:hit, s:finishHand, d:double, p:split, r:surrender };
+      if (map[k]) { e.preventDefault(); act(map[k]); }
+    }
+  });
+
+  S.shoe = newShoe();
+  if (S.balance < 5) say('Out of chips');
+  render();
+})();
+</script>
+</body>
+</html>
