@@ -27,10 +27,11 @@
   --win:#8bc8a2;
   --lose:#e3826f;
   --push:#a7aeaa;
-  --chip-5:#d8d3c5;
-  --chip-25:#7fae94;
-  --chip-100:#829ac6;
-  --chip-500:#cdb072;
+  --chip-5:#d4614f;
+  --chip-25:#4f9e74;
+  --chip-100:#2b3034;
+  --chip-500:#7d62b5;
+  --chip-text:#f6f3ea;
   --f-display:"Instrument Serif", "Iowan Old Style", Georgia, serif;
   --f-body:"Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --f-mono:"Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -39,6 +40,9 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0}
+img{max-width:100%}
 html,body{height:100%}
 body{
   background:var(--bg);
@@ -108,6 +112,16 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .total:empty{display:none}
 
 .center{display:flex;flex-direction:column;align-items:center;gap:6px;padding-block:22px;text-align:center}
+.score{display:flex;align-items:center;gap:clamp(20px, 6vw, 56px)}
+.side{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:3.2em}
+.side span{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+.side strong{
+  font-family:var(--f-display);font-weight:400;font-size:clamp(44px, 7vw, 76px);line-height:1;
+  font-variant-numeric:tabular-nums;transition:color .25s;
+}
+.side strong.bust{color:var(--lose)}
+.side strong.bj{color:var(--accent)}
+.score .vs{width:1px;height:56px;background:var(--line-strong)}
 .msg{
   font-family:var(--f-display);font-size:clamp(24px, 3.6vw, 34px);line-height:1.1;margin:0;min-height:1.1em;
   text-wrap:balance;transition:color .3s;
@@ -173,6 +187,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .hands.settled .hand{opacity:1}
 .hand-meta{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
 .hand-meta .bet{font-family:var(--f-mono)}
+.hands:not(.multi) .hand-meta .total{display:none}
 .pill{
   font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
   padding:3px 9px;border-radius:999px;border:1px solid currentColor;
@@ -197,22 +212,28 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
   min-height:96px;
 }
 .group{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px 14px;width:100%}
-.chips{display:flex;gap:10px}
+.chips{display:flex;gap:12px}
 .chip{
   --c:var(--chip-5);
-  width:54px;aspect-ratio:1;border-radius:50%;border:none;padding:0;
+  position:relative;width:58px;aspect-ratio:1;border-radius:50%;border:none;padding:0;
   background:
-    radial-gradient(circle, var(--surface) 0 56%, transparent 57%),
-    repeating-conic-gradient(var(--c) 0 12deg, transparent 12deg 30deg),
-    var(--surface-2);
-  box-shadow:0 0 0 1.5px var(--c) inset, 0 6px 14px rgba(0,0,0,.35);
-  font-family:var(--f-mono);font-size:13px;font-weight:500;color:var(--c);
-  transition:transform .15s var(--ease);
-  position:relative;
+    repeating-conic-gradient(from 7.5deg, rgba(255,255,255,.9) 0 15deg, transparent 15deg 60deg),
+    var(--c);
+  box-shadow:0 3px 0 color-mix(in srgb, var(--c) 60%, #000), 0 10px 18px rgba(0,0,0,.45);
+  color:var(--chip-text);
+  transition:transform .15s var(--ease), box-shadow .15s var(--ease);
 }
-.chip:hover:not(:disabled){transform:translateY(-3px)}
-.chip:active:not(:disabled){transform:translateY(0) scale(.96)}
-.chip:disabled{opacity:.28;cursor:not-allowed}
+.chip::before{
+  content:"";position:absolute;inset:7px;border-radius:50%;
+  background:var(--c);
+  box-shadow:0 0 0 1.5px rgba(255,255,255,.55) inset;
+}
+.chip span{
+  position:relative;font-family:var(--f-mono);font-size:14px;font-weight:600;letter-spacing:-.02em;
+}
+.chip:hover:not(:disabled){transform:translateY(-4px);box-shadow:0 7px 0 color-mix(in srgb, var(--c) 60%, #000), 0 16px 22px rgba(0,0,0,.45)}
+.chip:active:not(:disabled){transform:translateY(1px);box-shadow:0 1px 0 color-mix(in srgb, var(--c) 60%, #000), 0 4px 8px rgba(0,0,0,.4)}
+.chip:disabled{opacity:.25;cursor:not-allowed;filter:grayscale(.6)}
 .chip[data-v="25"]{--c:var(--chip-25)}
 .chip[data-v="100"]{--c:var(--chip-100)}
 .chip[data-v="500"]{--c:var(--chip-500)}
@@ -283,7 +304,8 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
   .bar{gap:12px}
   .shoe{display:none}
   .brand{font-size:22px}
-  .chip{width:48px}
+  .chip{width:50px}
+  .chip::before{inset:6px}
   .btn{padding:10px 13px}
   .sep{display:none}
   .table{padding-block:12px}
@@ -312,10 +334,15 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
   <main class="table">
     <div class="toast" id="toast" role="status"></div>
     <section class="zone dealer" aria-label="Dealer">
-      <div class="label">Dealer <span class="total num" id="dTotal"></span></div>
+      <div class="label">Dealer</div>
       <div class="cards" id="dCards"></div>
     </section>
     <div class="center">
+      <div class="score" aria-live="polite">
+        <div class="side"><span>Dealer</span><strong id="scoreDealer">–</strong></div>
+        <span class="vs" aria-hidden="true"></span>
+        <div class="side"><span id="youLabel">You</span><strong id="scoreYou">–</strong></div>
+      </div>
       <p class="msg" id="msg" aria-live="polite">Place your bet</p>
       <div class="print"><span>Blackjack pays 3 to 2</span><span>Dealer stands on soft 17</span><span>Insurance pays 2 to 1</span></div>
     </div>
@@ -328,10 +355,10 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
   <footer class="dock">
     <div class="group" id="gBet">
       <div class="chips">
-        <button class="chip" data-v="5" aria-label="Add 5">5</button>
-        <button class="chip" data-v="25" aria-label="Add 25">25</button>
-        <button class="chip" data-v="100" aria-label="Add 100">100</button>
-        <button class="chip" data-v="500" aria-label="Add 500">500</button>
+        <button class="chip" data-v="5" aria-label="Add 5"><span>5</span></button>
+        <button class="chip" data-v="25" aria-label="Add 25"><span>25</span></button>
+        <button class="chip" data-v="100" aria-label="Add 100"><span>100</span></button>
+        <button class="chip" data-v="500" aria-label="Add 500"><span>500</span></button>
       </div>
       <span class="sep"></span>
       <button class="btn" id="clearBtn">Clear <kbd>C</kbd></button>
@@ -485,7 +512,16 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
     $('shoeFill').style.width = (left / full * 100) + '%';
 
     renderCards($('dCards'), S.dealer);
-    $('dTotal').textContent = totalText(S.dealer);
+    const setScore = (el, cards) => {
+      const v = value(cards).total;
+      el.textContent = totalText(cards) || '–';
+      el.classList.toggle('bust', v > 21);
+      el.classList.toggle('bj', v === 21);
+    };
+    const cur = S.hands[Math.min(S.active, S.hands.length - 1)];
+    setScore($('scoreDealer'), S.dealer);
+    setScore($('scoreYou'), cur ? cur.cards : []);
+    $('youLabel').textContent = S.hands.length > 1 ? `Hand ${S.active + 1}` : 'You';
 
     const hb = $('hands');
     while (hb.children.length < S.hands.length) {
